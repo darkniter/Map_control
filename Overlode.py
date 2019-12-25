@@ -4,6 +4,9 @@ import os
 import config
 from ip_list import get_ip_addresses as get_ip_list
 
+namespaceLosted = []
+
+
 def main(option=None):
     old_map = load_old_map(option)
     into_json(
@@ -43,16 +46,22 @@ def remove_map_object(old_map,option = None):
                     address_mask = '.'.join(object_map.attrib['address'].split('.')[0:3:1])
                     if address_mask in vlans:
                         object_group.remove(object_map)
+                    elif (object_map.attrib.get('type-id')=='Switch'):
+                            namespaceLosted.append(str(object_map.attrib))
 
     if (option == 'ip' or option == None):
         ip_list = get_ip_list()
         for object_group in old_map:
             if object_group.tag == 'Devices':
                 for object_map in object_group:
-                    address = object_map.attrib['address']
-                    if address in ip_list:
-                        object_group.remove(object_map)
-
+                    try:
+                        address = object_map.attrib.get('address')
+                        if address in ip_list:
+                            object_group.remove(object_map)
+                        elif (object_map.attrib.get('type-id')=='Switch'):
+                            namespaceLosted.append(str(object_map.attrib))
+                    except KeyError as err:
+                        print('Error : ',err, 'map : ', object_map.attrib)
     # childs = old_map.getchildren()[0].getchildren()
     return old_map
 
@@ -72,7 +81,7 @@ def broken_flag(option = None):
         for object_group in old_map:
             if object_group.tag == 'Devices':
                 for object_map in object_group:
-                    address = object_map.attrib['address']
+                    address = object_map.attrib.get('address')
                     if address in broken_list:
                         object_group.remove(object_map)
         into_json(old_map,config.RESULT_CLEARED)
@@ -89,7 +98,7 @@ def broken_flag(option = None):
         for object_group in old_map:
             if object_group.tag == 'Devices':
                 for object_map in object_group:
-                    address = object_map.attrib['address']
+                    address = object_map.attrib.get('address')
                     if address in broken_list:
                         object_map.attrib['name'] += '[!broken!]'
         into_json(old_map,config.BROKEN_RESULT_FLAG)
@@ -106,7 +115,7 @@ def broken_flag(option = None):
         for object_group in old_map:
             if object_group.tag == 'Devices':
                 for object_map in object_group:
-                    address = object_map.attrib['address']
+                    address = object_map.attrib.get('address')
                     if address in broken_list:
                         object_group.remove(object_map)
         into_json(old_map,config.BROKEN_RESULT_FLAG_CLEARED)
@@ -130,5 +139,14 @@ if __name__ == "__main__":
         'named',
         'cleared_broken'
         ]
+
     for option in broken_flag_options:
         broken_flag(option)
+
+
+    if (os.path.isfile(config.LOSTDEVICES)):
+        os.remove(config.LOSTDEVICES)
+    with open(config.LOSTDEVICES, 'w', encoding='utf-8',newline='\n') as new_map_file:
+        json.dump(namespaceLosted,new_map_file)
+
+    # into_json(namespaceLosted, config.LOSTDEVICES)
